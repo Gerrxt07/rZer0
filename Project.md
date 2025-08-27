@@ -27,4 +27,5 @@
 
 ## Other Services
 
-- Prometheus + Grafana
+- Posthog for analytics
+- Maybe Clerk for user / authentication
