@@ -1,7 +1,6 @@
 # General
 
 - Hosted on Debian 12 Server.
-- Using Nginx as a reverse proxy.
 - Python is the primary code language.
 - Clean Codebase, Coding Guidelines and Documentation are key.
 
@@ -12,10 +11,10 @@
 
 ## Database Layer
 
-- PostgreSQL (Storage)
+- PostgreSQL (Storage via Docker)
                 - Libraries: psqlpy, SQLAlchemy, Alembic
 
-- Dragonfly (Cache)
+- Dragonfly (Cache via Docker)
                 - Libraries: Zangy
 
 ## Client Layer
