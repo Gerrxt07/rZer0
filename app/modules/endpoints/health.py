@@ -23,8 +23,8 @@ async def health_check():
     # Format time as HH:MM:SS
     time_formatted = now.strftime('%H:%M:%S')
     
-    # Create the message as requested
-    message = f"rZer0 Healthy and then date ({date_formatted}) and actual server time ({time_formatted} - Server based in FFM, Germany)"
+    # Create the response message
+    message = f"rZer0 is online and Healthy - ({date_formatted}), ({time_formatted} - Server based in FFM, Germany. We try to create the best backend ever.)"
     
     return JSONResponse({
         "message": message
