@@ -146,7 +146,7 @@ Expected result: 0 failures, ~3-4 req/s aggregate throughput.
 ### Code Quality Standards
 - **Clean Codebase** is a core principle - prioritize readability and maintainability
 - Use async/await patterns throughout Python code with `asyncio` and `rloop`
-- All endpoints return JSONResponse for consistency
+- All endpoints return ORJSONResponse for consistency and performance
 - Follow existing code structure in `app/modules/endpoints/`
 
 ### Application Architecture
