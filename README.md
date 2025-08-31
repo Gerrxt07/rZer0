@@ -3,6 +3,7 @@
 - Hosted on Debian 12 Server.
 - Python is the primary code language.
 - Clean Codebase, Coding Guidelines and Documentation are key.
+- Fully beeing async and multiprocessing
 
 ## Backend Stack
 
