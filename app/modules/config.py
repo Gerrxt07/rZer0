@@ -41,6 +41,10 @@ class Config:
         
         # Security Configuration
         self.SECRET_KEY: Optional[str] = os.getenv('SECRET_KEY')
+        
+        # Multiprocessing Configuration
+        self.WORKERS: int = int(os.getenv('WORKERS', '4'))
+        self.RUNTIME_THREADS: int = int(os.getenv('RUNTIME_THREADS', '4'))
 
 # Create a global config instance
 config = Config()

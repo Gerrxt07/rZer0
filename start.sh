@@ -3,10 +3,10 @@ set -e
 
 # Production configuration
 VENV_DIR="venv"
-HOST="0.0.0.0"
-PORT="8000"
-WORKERS="4"
-RUNTIME_THREADS="4"
+HOST="${HOST:-0.0.0.0}"
+PORT="${PORT:-8000}"
+WORKERS="${WORKERS:-4}"
+RUNTIME_THREADS="${RUNTIME_THREADS:-4}"
 APP_MODULE="app.main:app"
 
 # Colors for output

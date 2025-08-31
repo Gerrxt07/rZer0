@@ -5,7 +5,6 @@ Health check endpoint for the rZer0 API.
 from datetime import datetime
 from zoneinfo import ZoneInfo
 from fastapi import APIRouter
-from fastapi.responses import JSONResponse
 
 router = APIRouter()
 
@@ -23,8 +22,8 @@ async def health_check():
     # Format time as HH:MM:SS
     time_formatted = now.strftime('%H:%M:%S')
     
-    return JSONResponse({
+    return {
         "status": "online",
         "date": date_formatted,
         "time": time_formatted
-    })
+    }
