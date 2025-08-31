@@ -16,6 +16,9 @@ from .modules.endpoints.root import router as root_router
 from .modules.endpoints.health import router as health_router
 from .modules.endpoints.docs import create_docs_router
 
+# Import security middleware
+from .modules.security import setup_cors_middleware, setup_security_headers
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -45,6 +48,25 @@ app = FastAPI(
     openapi_url=config.OPENAPI_URL,
     default_response_class=ORJSONResponse,
     lifespan=lifespan,
+)
+
+# Set up security middleware
+# Note: Middleware is applied in reverse order, so security headers should be added first
+setup_security_headers(
+    app,
+    hsts_max_age=config.SECURITY_HSTS_MAX_AGE,
+    hsts_include_subdomains=config.SECURITY_HSTS_INCLUDE_SUBDOMAINS,
+    hsts_preload=config.SECURITY_HSTS_PRELOAD,
+    frame_options=config.SECURITY_FRAME_OPTIONS,
+    csp_policy=config.SECURITY_CSP_POLICY
+)
+
+setup_cors_middleware(
+    app,
+    allowed_origins=config.get_cors_origins() if config.get_cors_origins() else None,
+    allowed_methods=config.get_cors_methods(),
+    allowed_headers=config.get_cors_headers(),
+    allow_credentials=config.CORS_ALLOW_CREDENTIALS
 )
 
 # Include endpoint routers
