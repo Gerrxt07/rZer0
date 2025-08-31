@@ -6,3 +6,4 @@ colorama
 scalar-fastapi
 renoir
 loguru
+orjson
