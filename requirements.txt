@@ -1,0 +1,9 @@
+fastapi
+granian[rloop,reload,dotenv]
+python-dotenv
+rloop
+colorama
+scalar-fastapi
+renoir
+loguru
+zangy

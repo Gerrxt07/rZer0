@@ -1,0 +1,20 @@
+[Unit]
+Description=rZer0 FastAPI Application
+After=network.target
+
+[Service]
+Type=exec
+User=www-data
+Group=www-data
+WorkingDirectory=/root/rZero/rZer0
+Environment=PATH=/root/rZero/rZer0/venv/bin
+ExecStart=/root/rZero/rZer0/start-production.sh
+ExecReload=/bin/kill -HUP $MAINPID
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=rzero-api
+
+[Install]
+WantedBy=multi-user.target
