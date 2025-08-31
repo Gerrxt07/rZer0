@@ -8,7 +8,7 @@
 ## Backend Stack
 
 - FastAPI /w Granian ASGI/Workers - Using emmett's "renoir" as replacement for Jinja
-- Planned Python Libraries: Asyncio, httpx, rloop, pydantic, dramatiq, loguru
+- Planned Python Libraries: Asyncio, httpx, rloop, pydantic, arq, loguru
 
 ## Database Layer
 
