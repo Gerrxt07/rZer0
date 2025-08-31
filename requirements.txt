@@ -6,4 +6,3 @@ colorama
 scalar-fastapi
 renoir
 loguru
-zangy
