@@ -12,11 +12,13 @@ Usage:
     logger.debug("Debug information")
 """
 
-from .log import logger, get_logger, log_function_call, log_function_result
+from .log import logger, get_logger, get_sync_logger, log_function_call, log_function_result, stop_async_logging
 
 __all__ = [
     "logger",
     "get_logger", 
+    "get_sync_logger",
     "log_function_call",
-    "log_function_result"
+    "log_function_result",
+    "stop_async_logging"
 ]

@@ -3,6 +3,8 @@ A FastAPI application running with rloop and granian.
 """
 
 import asyncio
+import os
+import sys
 import rloop
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
@@ -12,7 +14,7 @@ from fastapi.responses import ORJSONResponse
 from .modules.config import config
 
 # Import logging
-from .modules.logging import logger
+from .modules.logging import logger, stop_async_logging
 
 # Import endpoint routers
 from .modules.endpoints.root import router as root_router
@@ -45,6 +47,16 @@ async def lifespan(app: FastAPI):
     # Shutdown
     logger.info("Shutting down rZer0 application")
     # Cleanup resources if needed
+    
+    # Stop async logging gracefully
+    try:
+        shutdown_timeout = float(os.getenv('LOG_ASYNC_SHUTDOWN_TIMEOUT', '2.0'))
+        stop_async_logging(timeout=shutdown_timeout)
+        logger.info("Async logging stopped gracefully")
+    except Exception as e:
+        # Use print as fallback since logging might be stopped
+        print(f"Warning: Error stopping async logging: {e}", file=sys.stderr)
+    
     logger.info("Application shutdown completed")
 
 logger.info("Initializing FastAPI application", name=config.APP_NAME, description=config.APP_DESCRIPTION)

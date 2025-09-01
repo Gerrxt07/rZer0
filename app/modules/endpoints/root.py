@@ -18,6 +18,6 @@ async def root():
         "status": "running"
     }
     
-    logger.info("Root endpoint response sent", message=response["message"], status=response["status"])
+    logger.info("Root endpoint response sent", response_message=response["message"], status=response["status"])
     
     return response

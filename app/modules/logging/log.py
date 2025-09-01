@@ -1,24 +1,37 @@
 """
-Advanced logging module for rZer0 using loguru and colorama.
+Advanced asynchronous logging module for rZer0 using loguru and colorama.
 
 This module provides a comprehensive yet simple logging system that supports:
 - Colored console output using colorama
 - Structured logging with loguru
 - File logging with automatic rotation
 - Different log levels with appropriate colors
+- **Asynchronous/threaded logging** for zero performance impact
 - Easy integration with existing and future code
+
+Features:
+- Background thread processing for all log operations
+- Non-blocking log calls using thread-safe queues
+- Graceful fallback to synchronous logging if async fails
+- Configurable queue size and timeout settings
+- Proper shutdown handling for thread cleanup
 
 Usage:
     from app.modules.logging import logger
     
-    logger.info("Application started")
-    logger.error("Something went wrong")
-    logger.debug("Debug information")
+    logger.info("Application started")  # Non-blocking, queued
+    logger.error("Something went wrong")  # Non-blocking, queued
+    logger.debug("Debug information")  # Non-blocking, queued
 """
 
 import sys
 import os
+import threading
+import queue
+import time
+import atexit
 from pathlib import Path
+from typing import Any, Dict, Optional, Callable
 from loguru import logger as loguru_logger
 from colorama import init, Fore, Back, Style
 
@@ -38,13 +51,173 @@ def get_config():
         return None
 
 
+class AsyncLogProcessor:
+    """Background thread processor for asynchronous logging."""
+    
+    def __init__(self, queue_size: int = 1000):
+        self.queue = queue.Queue(maxsize=queue_size)
+        self.shutdown_event = threading.Event()
+        self.thread: Optional[threading.Thread] = None
+        self.is_running = False
+    
+    def start(self):
+        """Start the background logging thread."""
+        if self.is_running:
+            return
+            
+        self.thread = threading.Thread(target=self._process_logs, daemon=True)
+        self.thread.start()
+        self.is_running = True
+        
+        # Register cleanup on exit
+        atexit.register(self.stop)
+    
+    def stop(self, timeout: float = 2.0):
+        """Stop the background logging thread gracefully."""
+        if not self.is_running:
+            return
+            
+        self.shutdown_event.set()
+        if self.thread and self.thread.is_alive():
+            self.thread.join(timeout=timeout)
+        self.is_running = False
+    
+    def put_log(self, log_func: Callable, message: str, *args, **kwargs) -> bool:
+        """
+        Queue a log message for background processing.
+        
+        Args:
+            log_func: The loguru logger function to call (e.g., logger.info)
+            message: Log message
+            *args, **kwargs: Additional arguments for the log function
+            
+        Returns:
+            bool: True if queued successfully, False if queue is full
+        """
+        try:
+            log_entry = {
+                'func': log_func,
+                'message': message,
+                'args': args,
+                'kwargs': kwargs,
+                'timestamp': time.time()
+            }
+            self.queue.put_nowait(log_entry)
+            return True
+        except queue.Full:
+            return False
+    
+    def _process_logs(self):
+        """Background thread worker that processes queued log messages."""
+        while not self.shutdown_event.is_set():
+            try:
+                # Wait for log entries with timeout to check shutdown event
+                log_entry = self.queue.get(timeout=0.1)
+                
+                # Process the log entry
+                func = log_entry['func']
+                message = log_entry['message']
+                args = log_entry['args']
+                kwargs = log_entry['kwargs']
+                
+                # Call the actual logging function
+                func(message, *args, **kwargs)
+                
+                self.queue.task_done()
+                
+            except queue.Empty:
+                continue
+            except Exception as e:
+                # In case of logging errors, write to stderr as fallback
+                print(f"Async logging error: {e}", file=sys.stderr)
+
+
+class AsyncLoggerWrapper:
+    """Wrapper that provides async logging interface compatible with loguru."""
+    
+    def __init__(self, processor: AsyncLogProcessor, sync_logger, fallback_to_sync: bool = True):
+        self.processor = processor
+        self.sync_logger = sync_logger
+        self.fallback_to_sync = fallback_to_sync
+    
+    def _async_log(self, level: str, message: str, *args, **kwargs):
+        """Internal method to handle async logging with fallback."""
+        log_func = getattr(self.sync_logger, level.lower())
+        
+        # Try to queue the log message
+        if self.processor.is_running and self.processor.put_log(log_func, message, *args, **kwargs):
+            return
+        
+        # Fallback to synchronous logging if async fails or is disabled
+        if self.fallback_to_sync:
+            log_func(message, *args, **kwargs)
+    
+    def trace(self, message: str, *args, **kwargs):
+        """Log trace level message."""
+        self._async_log('trace', message, *args, **kwargs)
+    
+    def debug(self, message: str, *args, **kwargs):
+        """Log debug level message."""
+        self._async_log('debug', message, *args, **kwargs)
+    
+    def info(self, message: str, *args, **kwargs):
+        """Log info level message."""
+        self._async_log('info', message, *args, **kwargs)
+    
+    def success(self, message: str, *args, **kwargs):
+        """Log success level message."""
+        self._async_log('success', message, *args, **kwargs)
+    
+    def warning(self, message: str, *args, **kwargs):
+        """Log warning level message."""
+        self._async_log('warning', message, *args, **kwargs)
+    
+    def error(self, message: str, *args, **kwargs):
+        """Log error level message."""
+        self._async_log('error', message, *args, **kwargs)
+    
+    def critical(self, message: str, *args, **kwargs):
+        """Log critical level message."""
+        self._async_log('critical', message, *args, **kwargs)
+    
+    def bind(self, **kwargs):
+        """Bind additional context to logger."""
+        bound_sync_logger = self.sync_logger.bind(**kwargs)
+        return AsyncLoggerWrapper(self.processor, bound_sync_logger, self.fallback_to_sync)
+    
+    def opt(self, **kwargs):
+        """Configure logger options."""
+        opted_sync_logger = self.sync_logger.opt(**kwargs)
+        return AsyncLoggerWrapper(self.processor, opted_sync_logger, self.fallback_to_sync)
+
+
 class LoggingSetup:
-    """Centralized logging setup for the rZer0 application."""
+    """Centralized logging setup for the rZer0 application with async support."""
     
     def __init__(self):
-        self.logger = loguru_logger
+        self.sync_logger = loguru_logger
         self.config = get_config()
+        
+        # Get async configuration
+        self.async_enabled = str(self._get_config_value('LOG_ASYNC_ENABLED', 'true')).lower() == 'true'
+        self.fallback_to_sync = str(self._get_config_value('LOG_ASYNC_FALLBACK', 'true')).lower() == 'true'
+        queue_size = int(self._get_config_value('LOG_ASYNC_QUEUE_SIZE', '1000'))
+        
+        # Initialize async processor with configured queue size
+        self.async_processor = AsyncLogProcessor(queue_size)
+        
         self._setup_logging()
+        
+        # Start async processor if enabled
+        if self.async_enabled:
+            self.async_processor.start()
+        
+        # Create async logger wrapper
+        self.logger = AsyncLoggerWrapper(
+            self.async_processor, 
+            self.sync_logger, 
+            self.fallback_to_sync
+        )
     
     def _get_config_value(self, key: str, default):
         """Get configuration value from config object or environment."""
@@ -55,7 +228,7 @@ class LoggingSetup:
     def _setup_logging(self):
         """Configure loguru with console and file handlers."""
         # Remove default handler
-        self.logger.remove()
+        self.sync_logger.remove()
         
         # Get configuration values
         log_level = self._get_config_value('LOG_LEVEL', 'DEBUG')
@@ -81,7 +254,7 @@ class LoggingSetup:
                 "<level>{message}</level>"
             )
             
-            self.logger.add(
+            self.sync_logger.add(
                 sys.stderr,
                 format=console_format,
                 level=log_level,
@@ -100,7 +273,7 @@ class LoggingSetup:
             )
             
             # File handler for all logs with rotation
-            self.logger.add(
+            self.sync_logger.add(
                 log_dir / "rzero.log",
                 format=file_format,
                 level=log_level,
@@ -113,7 +286,7 @@ class LoggingSetup:
             )
             
             # Separate error log file
-            self.logger.add(
+            self.sync_logger.add(
                 log_dir / "rzero_errors.log",
                 format=file_format,
                 level="ERROR",
@@ -126,8 +299,17 @@ class LoggingSetup:
             )
     
     def get_logger(self):
-        """Get the configured logger instance."""
+        """Get the configured logger instance (async wrapper)."""
         return self.logger
+    
+    def get_sync_logger(self):
+        """Get the underlying synchronous loguru logger."""
+        return self.sync_logger
+    
+    def stop_async_logging(self, timeout: float = 2.0):
+        """Stop the async logging processor gracefully."""
+        if self.async_enabled:
+            self.async_processor.stop(timeout)
 
 
 # Initialize logging setup
@@ -143,11 +325,37 @@ def get_logger(name: str = None):
         name: Optional name to bind to the logger (e.g., module name)
     
     Returns:
-        Logger instance
+        AsyncLoggerWrapper instance
     """
     if name:
         return logger.bind(name=name)
     return logger
+
+
+def get_sync_logger(name: str = None):
+    """
+    Get a synchronous logger instance (for cases where async is not suitable).
+    
+    Args:
+        name: Optional name to bind to the logger
+        
+    Returns:
+        Loguru logger instance
+    """
+    sync_logger = _logging_setup.get_sync_logger()
+    if name:
+        return sync_logger.bind(name=name)
+    return sync_logger
+
+
+def stop_async_logging(timeout: float = 2.0):
+    """
+    Stop the async logging system gracefully.
+    
+    Args:
+        timeout: Maximum time to wait for thread shutdown
+    """
+    _logging_setup.stop_async_logging(timeout)
 
 
 def log_function_call(func_name: str, args: tuple = None, kwargs: dict = None):

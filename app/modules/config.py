@@ -69,6 +69,12 @@ class Config:
         self.LOG_ENABLE_CONSOLE: bool = os.getenv('LOG_ENABLE_CONSOLE', 'true').lower() == 'true'
         self.LOG_ENABLE_FILE: bool = os.getenv('LOG_ENABLE_FILE', 'true').lower() == 'true'
         
+        # Async Logging Configuration
+        self.LOG_ASYNC_ENABLED: bool = os.getenv('LOG_ASYNC_ENABLED', 'true').lower() == 'true'
+        self.LOG_ASYNC_FALLBACK: bool = os.getenv('LOG_ASYNC_FALLBACK', 'true').lower() == 'true'
+        self.LOG_ASYNC_QUEUE_SIZE: int = int(os.getenv('LOG_ASYNC_QUEUE_SIZE', '1000'))
+        self.LOG_ASYNC_SHUTDOWN_TIMEOUT: float = float(os.getenv('LOG_ASYNC_SHUTDOWN_TIMEOUT', '2.0'))
+        
     def get_cors_origins(self) -> List[str]:
         """Get CORS allowed origins as a list."""
         if self.CORS_ALLOW_ORIGINS:
