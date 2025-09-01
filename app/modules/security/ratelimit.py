@@ -6,7 +6,18 @@ and fastapi-limiter with sliding window algorithm for precise rate limiting.
 Supports Cloudflare proxy headers for accurate client IP detection.
 """
 
-import redis.asyncio as aioredis
+try:
+    import zangy
+    ZANGY_AVAILABLE = True
+except ImportError:
+    ZANGY_AVAILABLE = False
+    # Fallback to redis for environments where zangy is not available
+    try:
+        import redis.asyncio as fallback_redis
+        REDIS_FALLBACK = True
+    except ImportError:
+        REDIS_FALLBACK = False
+
 from fastapi import Request, HTTPException, status
 from fastapi.responses import ORJSONResponse
 from fastapi_limiter import FastAPILimiter
@@ -21,27 +32,45 @@ from .middleware import get_real_client_ip
 
 async def init_rate_limiter() -> None:
     """
-    Initialize the rate limiter with Redis connection.
+    Initialize the rate limiter with Zangy connection (preferred) or Redis fallback.
     
     This function sets up the connection to Dragonfly (Redis-compatible)
-    and initializes FastAPILimiter with the connection.
+    using Zangy if available, otherwise falls back to Redis client.
     """
     try:
-        # Connect to Dragonfly using the Redis URL from config
-        redis_client = aioredis.from_url(
-            config.REDIS_URL,
-            encoding="utf-8",
-            decode_responses=True,
-            max_connections=20,
-            retry_on_timeout=True,
-            socket_connect_timeout=5,
-            socket_keepalive=True,
-            socket_keepalive_options={}
-        )
+        if ZANGY_AVAILABLE:
+            # Connect to Dragonfly using Zangy with the Redis URL from config
+            redis_client = zangy.Redis.from_url(
+                config.REDIS_URL,
+                encoding="utf-8",
+                decode_responses=True,
+                max_connections=20,
+                retry_on_timeout=True,
+                socket_connect_timeout=5,
+                socket_keepalive=True
+            )
+            logger.info("Using Zangy client for rate limiting", redis_url=config.REDIS_URL)
+        elif REDIS_FALLBACK:
+            # Fallback to standard Redis client
+            redis_client = fallback_redis.from_url(
+                config.REDIS_URL,
+                encoding="utf-8",
+                decode_responses=True,
+                max_connections=20,
+                retry_on_timeout=True,
+                socket_connect_timeout=5,
+                socket_keepalive=True,
+                socket_keepalive_options={}
+            )
+            logger.warning("Zangy not available, using Redis fallback client", redis_url=config.REDIS_URL)
+        else:
+            raise ImportError("Neither Zangy nor Redis client libraries are available")
         
         # Test the connection
         await redis_client.ping()
-        logger.info("Connected to Dragonfly for rate limiting", redis_url=config.REDIS_URL)
+        logger.info("Connected to Dragonfly for rate limiting", 
+                   client_type="Zangy" if ZANGY_AVAILABLE else "Redis",
+                   redis_url=config.REDIS_URL)
         
         # Initialize FastAPILimiter with Redis connection
         await FastAPILimiter.init(redis_client)
