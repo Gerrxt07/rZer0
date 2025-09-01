@@ -59,6 +59,16 @@ class Config:
         self.WORKERS: int = int(os.getenv('WORKERS', '4'))
         self.RUNTIME_THREADS: int = int(os.getenv('RUNTIME_THREADS', '4'))
         
+        # Logging Configuration
+        self.LOG_LEVEL: str = os.getenv('LOG_LEVEL', 'DEBUG')
+        self.LOG_DIR: str = os.getenv('LOG_DIR', 'logs')
+        self.LOG_FILE_MAX_SIZE: str = os.getenv('LOG_FILE_MAX_SIZE', '10 MB')
+        self.LOG_FILE_RETENTION: str = os.getenv('LOG_FILE_RETENTION', '7 days')
+        self.LOG_ERROR_FILE_MAX_SIZE: str = os.getenv('LOG_ERROR_FILE_MAX_SIZE', '5 MB')
+        self.LOG_ERROR_FILE_RETENTION: str = os.getenv('LOG_ERROR_FILE_RETENTION', '30 days')
+        self.LOG_ENABLE_CONSOLE: bool = os.getenv('LOG_ENABLE_CONSOLE', 'true').lower() == 'true'
+        self.LOG_ENABLE_FILE: bool = os.getenv('LOG_ENABLE_FILE', 'true').lower() == 'true'
+        
     def get_cors_origins(self) -> List[str]:
         """Get CORS allowed origins as a list."""
         if self.CORS_ALLOW_ORIGINS:

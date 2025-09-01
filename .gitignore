@@ -28,3 +28,6 @@ MANIFEST
 .env
 .env.local
 .env.*.local
+
+# Logs directory
+logs/
