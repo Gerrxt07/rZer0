@@ -35,21 +35,35 @@ async def init_rate_limiter() -> None:
     Initialize the rate limiter with Zangy connection (preferred) or Redis fallback.
     
     This function sets up the connection to Dragonfly (Redis-compatible)
-    using Zangy if available, otherwise falls back to Redis client.
+    using Zangy connection pool if available, otherwise falls back to Redis client.
+    
+    Zangy uses connection pools created with create_pool() for optimal performance,
+    especially in high-concurrency scenarios. It beats similar Python libraries
+    by fair margins and excels in parallel operations.
     """
     try:
         if ZANGY_AVAILABLE:
-            # Connect to Dragonfly using Zangy with the Redis URL from config
-            redis_client = zangy.Redis.from_url(
+            # Create Zangy connection pool optimized for rate limiting workload
+            # Pool size chosen based on expected concurrent rate limit checks
+            # Zangy distributes actions over the pool using round robin
+            pool = await zangy.create_pool(
                 config.REDIS_URL,
-                encoding="utf-8",
-                decode_responses=True,
-                max_connections=20,
-                retry_on_timeout=True,
-                socket_connect_timeout=5,
-                socket_keepalive=True
+                10,  # Regular connections for rate limiting operations
+                2    # PubSub connections (minimal for rate limiting use case)
             )
-            logger.info("Using Zangy client for rate limiting", redis_url=config.REDIS_URL)
+            
+            # Test the connection with a ping operation
+            # Zangy supports standard Redis operations like ping
+            await pool.execute("PING")
+            logger.info("Using Zangy connection pool for rate limiting", 
+                       redis_url=config.REDIS_URL,
+                       pool_size=10,
+                       pubsub_size=2,
+                       performance_note="Zangy excels in concurrent scenarios")
+            
+            # Store the pool reference for use with FastAPILimiter
+            redis_client = pool
+            
         elif REDIS_FALLBACK:
             # Fallback to standard Redis client
             redis_client = fallback_redis.from_url(
@@ -62,17 +76,19 @@ async def init_rate_limiter() -> None:
                 socket_keepalive=True,
                 socket_keepalive_options={}
             )
+            
+            # Test the connection
+            await redis_client.ping()
             logger.warning("Zangy not available, using Redis fallback client", redis_url=config.REDIS_URL)
         else:
             raise ImportError("Neither Zangy nor Redis client libraries are available")
         
-        # Test the connection
-        await redis_client.ping()
         logger.info("Connected to Dragonfly for rate limiting", 
                    client_type="Zangy" if ZANGY_AVAILABLE else "Redis",
                    redis_url=config.REDIS_URL)
         
-        # Initialize FastAPILimiter with Redis connection
+        # Initialize FastAPILimiter with Redis connection/pool
+        # Zangy pool is compatible with fastapi-limiter as it supports Redis operations
         await FastAPILimiter.init(redis_client)
         logger.info("Rate limiter initialized successfully")
         
