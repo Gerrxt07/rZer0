@@ -4,13 +4,14 @@ Health check endpoint for the rZer0 API.
 
 from datetime import datetime
 from zoneinfo import ZoneInfo
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 from ..logging import logger
+from ..security.ratelimit import rate_limiter
 
 router = APIRouter()
 
 
-@router.get("/health")
+@router.get("/health", dependencies=[Depends(rate_limiter)])
 async def health_check():
     """Health check endpoint."""
     logger.debug("Health check requested")
