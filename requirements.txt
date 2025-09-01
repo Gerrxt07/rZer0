@@ -7,3 +7,5 @@ scalar-fastapi
 renoir
 loguru
 orjson
+fastapi-limiter
+redis
