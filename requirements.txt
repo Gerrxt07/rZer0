@@ -8,10 +8,4 @@ renoir
 loguru
 orjson
 fastapi-limiter
-# zangy - Fast Redis library written in Rust (https://github.com/Gelbpunkt/zangy)
-# A high-performance Redis client that beats similar Python libraries by fair margins
-# Install: pip install --user zangy
-# For production: build from source if pip install fails (requires nightly Rust)
-# Falls back to standard redis client if zangy is not available
-zangy
-redis
+aioredis

@@ -24,10 +24,7 @@ from .modules.endpoints.docs import create_docs_router
 # Import security middleware
 from .modules.security import (
     setup_cors_middleware, 
-    setup_security_headers,
-    init_rate_limiter,
-    close_rate_limiter,
-    rate_limit_exceeded_handler
+    setup_security_headers
 )
 
 
@@ -44,20 +41,6 @@ async def lifespan(app: FastAPI):
     # Set rloop as the event loop policy for better performance
     asyncio.set_event_loop_policy(rloop.EventLoopPolicy())
     
-    # Initialize rate limiter if enabled
-    if config.RATE_LIMIT_ENABLED:
-        try:
-            await init_rate_limiter()
-            logger.info("Rate limiting initialized", 
-                       requests=config.RATE_LIMIT_REQUESTS,
-                       window=config.RATE_LIMIT_WINDOW)
-        except Exception as e:
-            logger.error("Failed to initialize rate limiter", error=str(e))
-            if config.LOG_LEVEL == "DEBUG":
-                logger.info("Continuing without rate limiting due to initialization failure")
-    else:
-        logger.info("Rate limiting is disabled")
-    
     # Additional multiprocessing optimizations can be added here
     # such as database connection pools, cache connections, etc.
     logger.info("Application startup completed")
@@ -67,14 +50,6 @@ async def lifespan(app: FastAPI):
     # Shutdown
     logger.info("Shutting down rZer0 application")
     # Cleanup resources if needed
-    
-    # Close rate limiter connections if enabled
-    if config.RATE_LIMIT_ENABLED:
-        try:
-            await close_rate_limiter()
-            logger.info("Rate limiter closed successfully")
-        except Exception as e:
-            logger.warning("Error closing rate limiter", error=str(e))
     
     # Stop async logging gracefully
     try:
@@ -102,12 +77,6 @@ app = FastAPI(
 )
 
 logger.debug("Setting up security middleware")
-
-# Add rate limit exception handler if rate limiting is enabled
-if config.RATE_LIMIT_ENABLED:
-    # Add custom handler for 429 Too Many Requests from rate limiter
-    app.add_exception_handler(429, rate_limit_exceeded_handler)
-    logger.debug("Rate limit exception handler registered")
 
 # Set up security middleware
 # Note: Middleware is applied in reverse order, so security headers should be added first

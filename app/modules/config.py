@@ -75,12 +75,6 @@ class Config:
         self.LOG_ASYNC_QUEUE_SIZE: int = int(os.getenv('LOG_ASYNC_QUEUE_SIZE', '1000'))
         self.LOG_ASYNC_SHUTDOWN_TIMEOUT: float = float(os.getenv('LOG_ASYNC_SHUTDOWN_TIMEOUT', '2.0'))
         
-        # Rate Limiting Configuration
-        self.RATE_LIMIT_ENABLED: bool = os.getenv('RATE_LIMIT_ENABLED', 'true').lower() == 'true'
-        self.RATE_LIMIT_REQUESTS: int = int(os.getenv('RATE_LIMIT_REQUESTS', '100'))  # requests per window
-        self.RATE_LIMIT_WINDOW: int = int(os.getenv('RATE_LIMIT_WINDOW', '60'))     # window size in seconds
-        self.RATE_LIMIT_MESSAGE: str = os.getenv('RATE_LIMIT_MESSAGE', 'Rate limit exceeded. Please try again later.')
-        
     def get_cors_origins(self) -> List[str]:
         """Get CORS allowed origins as a list."""
         if self.CORS_ALLOW_ORIGINS:
