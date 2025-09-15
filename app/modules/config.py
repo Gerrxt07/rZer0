@@ -2,79 +2,261 @@
 Configuration module for rZer0 application.
 
 This module handles loading environment variables from .env file
-and provides configuration with sensible defaults.
+with validation, type safety, and environment-specific configurations.
 """
 
 import os
+import sys
 from pathlib import Path
-from typing import Optional, List
-
+from typing import Optional, List, Union, Literal
+from pydantic import Field, ValidationError, field_validator, model_validator
+from pydantic_settings import BaseSettings, SettingsConfigDict
 from dotenv import load_dotenv
 
 
-class Config:
-    """Configuration class that loads environment variables with defaults."""
+class Config(BaseSettings):
+    """Configuration class that loads environment variables with validation and defaults."""
     
-    def __init__(self):
-        """Initialize configuration by loading .env file."""
-        # Load .env file from the project root
-        env_path = Path(__file__).parent.parent.parent / '.env'
-        load_dotenv(env_path)
+    # Environment Configuration
+    ENVIRONMENT: Literal["development", "staging", "production"] = Field(
+        default="development",
+        description="Application environment (development, staging, production)"
+    )
+    
+    # Application Configuration
+    APP_NAME: str = Field(
+        default="rZer0",
+        description="Application name"
+    )
+    APP_VERSION: str = Field(
+        default="1.0.0",
+        description="Application version"
+    )
+    APP_DESCRIPTION: str = Field(
+        default="A simple FastAPI application running with rloop and granian.",
+        description="Application description"
+    )
+    
+    # API Documentation Configuration
+    DOCS_URL: Optional[str] = Field(
+        default=None,
+        description="Swagger UI documentation URL (set to None to disable)"
+    )
+    REDOC_URL: Optional[str] = Field(
+        default=None,
+        description="ReDoc documentation URL (set to None to disable)"
+    )
+    OPENAPI_URL: str = Field(
+        default="/openapi.json",
+        description="OpenAPI schema URL"
+    )
+    
+    # Database Configuration
+    DATABASE_URL: Optional[str] = Field(
+        default=None,
+        description="Database connection URL (PostgreSQL/MySQL/SQLite)"
+    )
+    
+    # Redis/Dragonfly Configuration
+    REDIS_URL: str = Field(
+        default="redis://localhost:6379",
+        description="Redis/Dragonfly connection URL"
+    )
+    
+    # Security Configuration
+    SECRET_KEY: Optional[str] = Field(
+        default=None,
+        description="Secret key for JWT tokens and encryption (required for production)"
+    )
+    
+    # CORS Configuration
+    CORS_ALLOW_ORIGINS: Optional[str] = Field(
+        default=None,
+        description="Comma-separated list of allowed CORS origins"
+    )
+    CORS_ALLOW_CREDENTIALS: bool = Field(
+        default=True,
+        description="Allow credentials in CORS requests"
+    )
+    CORS_ALLOW_METHODS: str = Field(
+        default="GET,POST,PUT,DELETE,OPTIONS,HEAD,PATCH",
+        description="Allowed HTTP methods for CORS"
+    )
+    CORS_ALLOW_HEADERS: str = Field(
+        default="*",
+        description="Allowed headers for CORS"
+    )
+    
+    # Security Headers Configuration
+    SECURITY_HSTS_MAX_AGE: int = Field(
+        default=31536000,
+        description="HSTS max age in seconds (1 year default)"
+    )
+    SECURITY_HSTS_INCLUDE_SUBDOMAINS: bool = Field(
+        default=True,
+        description="Include subdomains in HSTS policy"
+    )
+    SECURITY_HSTS_PRELOAD: bool = Field(
+        default=True,
+        description="Enable HSTS preload"
+    )
+    SECURITY_FRAME_OPTIONS: str = Field(
+        default="DENY",
+        description="X-Frame-Options header value"
+    )
+    SECURITY_CSP_POLICY: Optional[str] = Field(
+        default=None,
+        description="Content Security Policy header value"
+    )
+    
+    # Server Configuration
+    HOST: str = Field(
+        default="0.0.0.0",
+        description="Server host address"
+    )
+    PORT: int = Field(
+        default=8000,
+        description="Server port number",
+        ge=1,
+        le=65535
+    )
+    WORKERS: int = Field(
+        default=4,
+        description="Number of worker processes",
+        ge=1,
+        le=32
+    )
+    RUNTIME_THREADS: int = Field(
+        default=4,
+        description="Number of runtime threads per worker",
+        ge=1,
+        le=16
+    )
+    BACKLOG: int = Field(
+        default=2048,
+        description="Socket backlog size",
+        ge=128,
+        le=8192
+    )
+    
+    # Logging Configuration
+    LOG_LEVEL: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = Field(
+        default="DEBUG",
+        description="Logging level"
+    )
+    LOG_DIR: str = Field(
+        default="logs",
+        description="Directory for log files"
+    )
+    LOG_FILE_MAX_SIZE: int = Field(
+        default=10,
+        description="Maximum size per log file in MB",
+        ge=1,
+        le=1000
+    )
+    LOG_FILE_RETENTION: int = Field(
+        default=7,
+        description="Log file retention period in days",
+        ge=1,
+        le=365
+    )
+    LOG_ERROR_FILE_MAX_SIZE: int = Field(
+        default=5,
+        description="Maximum size per error log file in MB",
+        ge=1,
+        le=1000
+    )
+    LOG_ERROR_FILE_RETENTION: int = Field(
+        default=30,
+        description="Error log file retention period in days",
+        ge=1,
+        le=365
+    )
+    LOG_ENABLE_CONSOLE: bool = Field(
+        default=True,
+        description="Enable console logging"
+    )
+    LOG_ENABLE_FILE: bool = Field(
+        default=True,
+        description="Enable file logging"
+    )
+    
+    # Async Logging Configuration
+    LOG_ASYNC_ENABLED: bool = Field(
+        default=True,
+        description="Enable asynchronous logging for better performance"
+    )
+    LOG_ASYNC_FALLBACK: bool = Field(
+        default=True,
+        description="Fallback to synchronous logging if async queue is full"
+    )
+    LOG_ASYNC_QUEUE_SIZE: int = Field(
+        default=1000,
+        description="Maximum number of queued log messages",
+        ge=100,
+        le=10000
+    )
+    LOG_ASYNC_SHUTDOWN_TIMEOUT: float = Field(
+        default=2.0,
+        description="Timeout for graceful shutdown of async logging thread",
+        ge=0.1,
+        le=30.0
+    )
+    
+    # Pydantic configuration
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        case_sensitive=True,
+        validate_assignment=True,
+        extra="ignore"
+    )
+    
+    def __init__(self, **kwargs):
+        """Initialize configuration by loading environment-specific .env file."""
+        # Load environment-specific .env file before calling super().__init__
+        self._load_environment_files()
+        super().__init__(**kwargs)
+    
+    def _load_environment_files(self):
+        """Load environment-specific .env files."""
+        project_root = Path(__file__).parent.parent.parent
+        env_name = os.getenv('ENVIRONMENT', 'development')
         
-        # Application Configuration
-        self.APP_NAME: str = os.getenv('APP_NAME', 'rZer0')
-        self.APP_VERSION: str = os.getenv('APP_VERSION', '1.0.0')
-        self.APP_DESCRIPTION: str = os.getenv(
-            'APP_DESCRIPTION', 
-            'A simple FastAPI application running with rloop and granian.'
-        )
+        # Load environment-specific .env file first, then fallback to .env
+        env_files = [
+            project_root / f'.env.{env_name}',
+            project_root / '.env'
+        ]
         
-        self.DOCS_URL: Optional[str] = os.getenv('DOCS_URL', None)
-        self.REDOC_URL: Optional[str] = os.getenv('REDOC_URL', None)
-        self.OPENAPI_URL: str = os.getenv('OPENAPI_URL', '/openapi.json')
-        
-        # Database Configuration (for future use)
-        self.DATABASE_URL: Optional[str] = os.getenv('DATABASE_URL')
-        
-        # Redis/Dragonfly Configuration (for future use)
-        self.REDIS_URL: str = os.getenv('REDIS_URL', 'redis://localhost:6379')
-        
-        # Security Configuration
-        self.SECRET_KEY: Optional[str] = os.getenv('SECRET_KEY')
-        
-        # CORS Configuration
-        self.CORS_ALLOW_ORIGINS: Optional[str] = os.getenv('CORS_ALLOW_ORIGINS')
-        self.CORS_ALLOW_CREDENTIALS: bool = os.getenv('CORS_ALLOW_CREDENTIALS', 'true').lower() == 'true'
-        self.CORS_ALLOW_METHODS: str = os.getenv('CORS_ALLOW_METHODS', 'GET,POST,PUT,DELETE,OPTIONS,HEAD,PATCH')
-        self.CORS_ALLOW_HEADERS: str = os.getenv('CORS_ALLOW_HEADERS', '*')
-        
-        # Security Headers Configuration
-        self.SECURITY_HSTS_MAX_AGE: int = int(os.getenv('SECURITY_HSTS_MAX_AGE', '31536000'))
-        self.SECURITY_HSTS_INCLUDE_SUBDOMAINS: bool = os.getenv('SECURITY_HSTS_INCLUDE_SUBDOMAINS', 'true').lower() == 'true'
-        self.SECURITY_HSTS_PRELOAD: bool = os.getenv('SECURITY_HSTS_PRELOAD', 'true').lower() == 'true'
-        self.SECURITY_FRAME_OPTIONS: str = os.getenv('SECURITY_FRAME_OPTIONS', 'DENY')
-        self.SECURITY_CSP_POLICY: Optional[str] = os.getenv('SECURITY_CSP_POLICY')
-        
-        # Multiprocessing Configuration
-        self.WORKERS: int = int(os.getenv('WORKERS', '4'))
-        self.RUNTIME_THREADS: int = int(os.getenv('RUNTIME_THREADS', '4'))
-        
-        # Logging Configuration
-        self.LOG_LEVEL: str = os.getenv('LOG_LEVEL', 'DEBUG')
-        self.LOG_DIR: str = os.getenv('LOG_DIR', 'logs')
-        self.LOG_FILE_MAX_SIZE: str = os.getenv('LOG_FILE_MAX_SIZE', '10 MB')
-        self.LOG_FILE_RETENTION: str = os.getenv('LOG_FILE_RETENTION', '7 days')
-        self.LOG_ERROR_FILE_MAX_SIZE: str = os.getenv('LOG_ERROR_FILE_MAX_SIZE', '5 MB')
-        self.LOG_ERROR_FILE_RETENTION: str = os.getenv('LOG_ERROR_FILE_RETENTION', '30 days')
-        self.LOG_ENABLE_CONSOLE: bool = os.getenv('LOG_ENABLE_CONSOLE', 'true').lower() == 'true'
-        self.LOG_ENABLE_FILE: bool = os.getenv('LOG_ENABLE_FILE', 'true').lower() == 'true'
-        
-        # Async Logging Configuration
-        self.LOG_ASYNC_ENABLED: bool = os.getenv('LOG_ASYNC_ENABLED', 'true').lower() == 'true'
-        self.LOG_ASYNC_FALLBACK: bool = os.getenv('LOG_ASYNC_FALLBACK', 'true').lower() == 'true'
-        self.LOG_ASYNC_QUEUE_SIZE: int = int(os.getenv('LOG_ASYNC_QUEUE_SIZE', '1000'))
-        self.LOG_ASYNC_SHUTDOWN_TIMEOUT: float = float(os.getenv('LOG_ASYNC_SHUTDOWN_TIMEOUT', '2.0'))
-        
+        for env_file in env_files:
+            if env_file.exists():
+                load_dotenv(env_file, override=False)  # Don't override already set variables
+                break
+    
+    @field_validator('DATABASE_URL')
+    @classmethod
+    def validate_database_url(cls, v):
+        """Validate database URL format if provided."""
+        if v and not v.startswith(('postgresql://', 'mysql://', 'sqlite:///')):
+            raise ValueError('DATABASE_URL must start with postgresql://, mysql://, or sqlite:///')
+        return v
+    
+    @field_validator('REDIS_URL')
+    @classmethod
+    def validate_redis_url(cls, v):
+        """Validate Redis URL format."""
+        if not v.startswith(('redis://', 'rediss://')):
+            raise ValueError('REDIS_URL must start with redis:// or rediss://')
+        return v
+    
+    @model_validator(mode='after')
+    def validate_environment_requirements(self):
+        """Validate that required environment variables are set based on environment."""
+        if self.ENVIRONMENT in ['production', 'staging'] and not self.SECRET_KEY:
+            raise ValueError(f'SECRET_KEY is required for {self.ENVIRONMENT} environment')
+        return self
+    
     def get_cors_origins(self) -> List[str]:
         """Get CORS allowed origins as a list."""
         if self.CORS_ALLOW_ORIGINS:
@@ -90,6 +272,34 @@ class Config:
         if self.CORS_ALLOW_HEADERS == '*':
             return ['*']
         return [header.strip() for header in self.CORS_ALLOW_HEADERS.split(',')]
+    
+    def is_development(self) -> bool:
+        """Check if running in development environment."""
+        return self.ENVIRONMENT == 'development'
+    
+    def is_production(self) -> bool:
+        """Check if running in production environment."""
+        return self.ENVIRONMENT == 'production'
+    
+    def is_staging(self) -> bool:
+        """Check if running in staging environment."""
+        return self.ENVIRONMENT == 'staging'
+
+
+def create_config() -> Config:
+    """Create and validate configuration instance with proper error handling."""
+    try:
+        return Config()
+    except ValidationError as e:
+        print(f"Configuration validation error: {e}", file=sys.stderr)
+        sys.exit(1)
+    except ValueError as e:
+        print(f"Configuration error: {e}", file=sys.stderr)
+        sys.exit(1)
+    except Exception as e:
+        print(f"Unexpected configuration error: {e}", file=sys.stderr)
+        sys.exit(1)
+
 
 # Create a global config instance
-config = Config()
+config = create_config()

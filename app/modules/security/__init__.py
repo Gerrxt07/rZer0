@@ -1,8 +1,8 @@
 """
 Security module for rZer0 application.
 
-This module contains security-related middleware including CORS configuration,
-security headers, and rate limiting for the FastAPI application.
+This module contains security-related middleware including CORS configuration
+and security headers for the FastAPI application.
 """
 
 from .middleware import setup_cors_middleware

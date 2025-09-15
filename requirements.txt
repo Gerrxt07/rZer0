@@ -8,4 +8,6 @@ renoir
 loguru
 orjson
 fastapi-limiter
-aioredis
+redis[hiredis]
+pydantic
+pydantic-settings

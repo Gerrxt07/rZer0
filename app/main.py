@@ -19,12 +19,19 @@ from .modules.logging import logger, stop_async_logging
 # Import endpoint routers
 from .modules.endpoints.root import router as root_router
 from .modules.endpoints.health import router as health_router
+from .modules.endpoints.cache import router as cache_router
 from .modules.endpoints.docs import create_docs_router
 
 # Import security middleware
 from .modules.security import (
     setup_cors_middleware, 
     setup_security_headers
+)
+
+# Import performance optimizations
+from .modules.performance import (
+    setup_compression_middleware,
+    setup_performance_monitoring
 )
 
 
@@ -41,6 +48,15 @@ async def lifespan(app: FastAPI):
     # Set rloop as the event loop policy for better performance
     asyncio.set_event_loop_policy(rloop.EventLoopPolicy())
     
+    # Initialize Redis cache connection
+    logger.debug("Initializing Redis cache connection")
+    try:
+        from .modules.performance.caching import get_cache_manager
+        cache = await get_cache_manager()
+        logger.info("Redis cache connection established")
+    except Exception as e:
+        logger.warning("Failed to connect to Redis cache, continuing without caching", error=str(e))
+    
     # Additional multiprocessing optimizations can be added here
     # such as database connection pools, cache connections, etc.
     logger.info("Application startup completed")
@@ -49,12 +65,20 @@ async def lifespan(app: FastAPI):
     
     # Shutdown
     logger.info("Shutting down rZer0 application")
-    # Cleanup resources if needed
+    
+    # Cleanup Redis connection
+    logger.debug("Closing Redis cache connection")
+    try:
+        from .modules.performance.caching import cache_manager
+        if cache_manager:
+            await cache_manager.disconnect()
+        logger.info("Redis cache connection closed")
+    except Exception as e:
+        logger.warning("Error closing Redis cache connection", error=str(e))
     
     # Stop async logging gracefully
     try:
-        shutdown_timeout = float(os.getenv('LOG_ASYNC_SHUTDOWN_TIMEOUT', '2.0'))
-        stop_async_logging(timeout=shutdown_timeout)
+        stop_async_logging(timeout=config.LOG_ASYNC_SHUTDOWN_TIMEOUT)
         logger.info("Async logging stopped gracefully")
     except Exception as e:
         # Use print as fallback since logging might be stopped
@@ -77,6 +101,11 @@ app = FastAPI(
 )
 
 logger.debug("Setting up security middleware")
+
+# Set up performance optimizations first (middleware order matters)
+logger.debug("Setting up performance optimizations")
+setup_performance_monitoring(app)
+setup_compression_middleware(app, minimum_size=500)  # Compress responses > 500 bytes
 
 # Set up security middleware
 # Note: Middleware is applied in reverse order, so security headers should be added first
@@ -102,6 +131,7 @@ logger.debug("Including endpoint routers")
 # Include endpoint routers
 app.include_router(root_router)
 app.include_router(health_router)
+app.include_router(cache_router)
 
 # Create and include docs router with app configuration
 docs_router = create_docs_router(

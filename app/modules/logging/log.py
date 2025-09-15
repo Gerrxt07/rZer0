@@ -135,8 +135,8 @@ class AsyncLogProcessor:
 class AsyncLoggerWrapper:
     """Wrapper that provides async logging interface compatible with loguru."""
     
-    def __init__(self, processor: AsyncLogProcessor, sync_logger, fallback_to_sync: bool = True):
-        self.processor = processor
+    def __init__(self, logging_setup, sync_logger, fallback_to_sync: bool = True):
+        self.logging_setup = logging_setup
         self.sync_logger = sync_logger
         self.fallback_to_sync = fallback_to_sync
     
@@ -144,8 +144,13 @@ class AsyncLoggerWrapper:
         """Internal method to handle async logging with fallback."""
         log_func = getattr(self.sync_logger, level.lower())
         
+        # Ensure async processor is started before trying to use it
+        if self.logging_setup.async_enabled:
+            self.logging_setup._ensure_async_processor_started()
+        
         # Try to queue the log message
-        if self.processor.is_running and self.processor.put_log(log_func, message, *args, **kwargs):
+        processor = self.logging_setup.async_processor
+        if processor.is_running and processor.put_log(log_func, message, *args, **kwargs):
             return
         
         # Fallback to synchronous logging if async fails or is disabled
@@ -183,12 +188,12 @@ class AsyncLoggerWrapper:
     def bind(self, **kwargs):
         """Bind additional context to logger."""
         bound_sync_logger = self.sync_logger.bind(**kwargs)
-        return AsyncLoggerWrapper(self.processor, bound_sync_logger, self.fallback_to_sync)
+        return AsyncLoggerWrapper(self.logging_setup, bound_sync_logger, self.fallback_to_sync)
     
     def opt(self, **kwargs):
         """Configure logger options."""
         opted_sync_logger = self.sync_logger.opt(**kwargs)
-        return AsyncLoggerWrapper(self.processor, opted_sync_logger, self.fallback_to_sync)
+        return AsyncLoggerWrapper(self.logging_setup, opted_sync_logger, self.fallback_to_sync)
 
 
 class LoggingSetup:
@@ -208,13 +213,13 @@ class LoggingSetup:
         
         self._setup_logging()
         
-        # Start async processor if enabled
-        if self.async_enabled:
-            self.async_processor.start()
+        # NOTE: Async processor startup is deferred until after event loop policy is set
+        # This prevents conflicts with rloop event loop policy changes
+        # The processor will be started when first needed via _ensure_async_processor_started()
         
         # Create async logger wrapper
         self.logger = AsyncLoggerWrapper(
-            self.async_processor, 
+            self, 
             self.sync_logger, 
             self.fallback_to_sync
         )
@@ -236,10 +241,17 @@ class LoggingSetup:
         enable_console = str(self._get_config_value('LOG_ENABLE_CONSOLE', 'true')).lower() == 'true'
         enable_file = str(self._get_config_value('LOG_ENABLE_FILE', 'true')).lower() == 'true'
         
-        log_file_max_size = self._get_config_value('LOG_FILE_MAX_SIZE', '10 MB')
-        log_file_retention = self._get_config_value('LOG_FILE_RETENTION', '7 days')
-        log_error_file_max_size = self._get_config_value('LOG_ERROR_FILE_MAX_SIZE', '5 MB')
-        log_error_file_retention = self._get_config_value('LOG_ERROR_FILE_RETENTION', '30 days')
+        # Get numeric values and convert to loguru format
+        log_file_max_size_mb = int(str(self._get_config_value('LOG_FILE_MAX_SIZE', '10')))
+        log_file_retention_days = int(str(self._get_config_value('LOG_FILE_RETENTION', '7')))
+        log_error_file_max_size_mb = int(str(self._get_config_value('LOG_ERROR_FILE_MAX_SIZE', '5')))
+        log_error_file_retention_days = int(str(self._get_config_value('LOG_ERROR_FILE_RETENTION', '30')))
+        
+        # Convert to loguru format
+        log_file_max_size = f"{log_file_max_size_mb} MB"
+        log_file_retention = f"{log_file_retention_days} days"
+        log_error_file_max_size = f"{log_error_file_max_size_mb} MB"
+        log_error_file_retention = f"{log_error_file_retention_days} days"
         
         # Create log directory
         if enable_file:
@@ -297,6 +309,11 @@ class LoggingSetup:
                 diagnose=True,
                 encoding="utf-8"
             )
+    
+    def _ensure_async_processor_started(self):
+        """Ensure async processor is started (deferred startup for event loop compatibility)."""
+        if self.async_enabled and not self.async_processor.is_running:
+            self.async_processor.start()
     
     def get_logger(self):
         """Get the configured logger instance (async wrapper)."""

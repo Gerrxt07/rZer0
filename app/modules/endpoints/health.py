@@ -6,11 +6,13 @@ from datetime import datetime
 from zoneinfo import ZoneInfo
 from fastapi import APIRouter, Depends
 from ..logging import logger
+from ..performance.caching import cache_response
 
 router = APIRouter()
 
 
 @router.get("/health")
+@cache_response(ttl=5, key_prefix="health_")  # Cache for 5 seconds (frequent health checks)
 async def health_check():
     """Health check endpoint."""
     logger.debug("Health check requested")
@@ -20,7 +22,7 @@ async def health_check():
     now = datetime.now(berlin_tz)
     
     # Format date as DD:MM:YYYY
-    date_formatted = now.strftime('%d:%m:%Y')
+    date_formatted = now.strftime('%d.%m.%Y')
     
     # Format time as HH:MM:SS
     time_formatted = now.strftime('%H:%M:%S')
